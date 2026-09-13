@@ -1,0 +1,364 @@
+.rsvps {
+  width: 100%;
+  min-height: 100vh;
+
+  background-image: url("../assets/mu.webp");
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center 30%;
+
+  position: relative;
+  overflow: hidden;
+}
+
+.rsvps::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Ensure content stays above overlay */
+.rsvp_contain,
+.rsvp_form_section,
+.bread_crumb {
+  position: relative;
+  z-index: 2;
+}
+
+/* Titles */
+.first {
+  font-weight: 400;
+  font-family: "lux";
+  font-size: 120px;
+  text-transform: uppercase;
+}
+.rsvp_contain {
+  padding: 50px;
+  text-align: center;
+}
+.rsvp_title {
+  font-size: 70px;
+  font-family: "libre";
+  text-transform: uppercase;
+  font-weight: 400;
+  color: #fff;
+}
+.rsvp_para {
+  color: #fff;
+  font-family: "libre";
+}
+
+/* Breadcrumb */
+.bread_crumb {
+  gap: 10px;
+  display: flex;
+  padding: 40px;
+}
+.home_title {
+  color: #fff;
+  font-family: "poppins", sans-serif;
+  text-transform: uppercase;
+  font-size: 15px;
+}
+.io {
+  cursor: pointer;
+  z-index: 1;
+  position: relative;
+  text-transform: capitalize;
+}
+/* Form Container */
+.rsvp_form_section {
+  max-width: 500px;
+  margin: auto;
+  padding: 50px 0;
+}
+
+.rsvp_form {
+  background-color: rgba(0, 0, 0, 0.6);
+  padding: 40px;
+}
+
+/* Form Elements */
+.rsvp_label {
+  color: #fff;
+  font-size: 15px;
+  margin-bottom: 10px;
+  font-family: "poppins";
+}
+
+.rsvp_input {
+  background-color: transparent;
+  border: 1px solid #dddddd4d;
+  color: #fff;
+  padding: 10px;
+  outline: none;
+}
+
+/* Remove hover/focus border and background changes for inputs and textareas */
+.rsvp_input.ant-input,
+.rsvp_input.ant-input:hover,
+.rsvp_input.ant-input:focus,
+.rsvp_input.ant-input-focused,
+.rsvp_select .ant-select-selector,
+.rsvp_select .ant-select-selector:hover,
+.rsvp_select .ant-select-selector:focus,
+.rsvp_select .ant-select-selector:active {
+  border-color: #dddddd4d !important; /* keep original border */
+  box-shadow: none !important; /* remove focus shadow */
+  background-color: transparent !important; /* keep dark transparent bg */
+}
+
+/* Remove hover effect for AntD checkbox */
+.foa .ant-checkbox-inner,
+.foa .ant-checkbox-inner:hover,
+.foa .ant-checkbox-input:focus + .ant-checkbox-inner {
+  border-color: #fff !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Optional: remove placeholder opacity change on focus */
+.rsvp_input::placeholder {
+  color: #ddd !important;
+  opacity: 1 !important;
+}
+.thank_you_msg {
+  font-family: "poppins";
+  color: #fff;
+  font-size: 14px;
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+/* Custom Select */
+.select_wrapper {
+  position: relative;
+  width: 100%;
+}
+/* Input and TextArea placeholders */
+.rsvp_input::placeholder {
+  color: #ddd !important;
+  opacity: 1;
+}
+
+/* Ant Design Select placeholder */
+.rsvp_select .ant-select-selector .ant-select-selection-placeholder {
+  color: #ddd !important;
+  opacity: 1;
+}
+
+/* Adjust Select text color (selected value) to white for dark form */
+.rsvp_select .ant-select-selection-item {
+  color: #fff !important;
+}
+
+/* Optional: Adjust arrow color */
+.rsvp_select .ant-select-arrow {
+  color: #fff;
+}
+.rsvp_select::placeholder {
+  color: #fff !important;
+}
+.rsvp_select {
+  width: 100%;
+  padding: 10px;
+  background-color: #ffffff1a;
+  border: 1px solid #dddddd4d;
+  color: #fff;
+  font-size: 16px;
+  border-radius: 4px;
+  outline: none;
+
+  /* Remove default arrows */
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+.select_wrapper::after {
+  content: "▾";
+  position: absolute;
+  right: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #fff;
+  font-size: 18px;
+  pointer-events: none;
+}
+
+/* Checkboxes */
+.foa {
+  display: flex;
+  color: #fff;
+  font-family: "libre";
+  font-size: 14px;
+  gap: 5px;
+}
+.checkbox_label {
+  color: #fff;
+  font-size: 14px;
+}
+.ko {
+  margin: 5px 0;
+}
+
+.form_section {
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.submit_btn {
+  background-color: #000;
+  width: 100%;
+  padding: 25px;
+  color: #fff;
+  text-transform: uppercase;
+  font-family: "poppins", sans-serif;
+  cursor: pointer;
+  outline: none;
+  border: none;
+}
+
+/* ========================== */
+/*      SMALL LAPTOPS         */
+/* ========================== */
+@media (max-width: 1024px) {
+  .rsvp_title {
+    font-size: 55px;
+  }
+
+  .first {
+    font-size: 90px;
+  }
+
+  .rsvp_form_section {
+    max-width: 450px;
+  }
+}
+
+/* ========================== */
+/*         TABLETS            */
+/* ========================== */
+@media (max-width: 768px) {
+  .bread_crumb {
+    padding: 20px;
+  }
+
+  .rsvp_contain {
+    padding: 30px 20px;
+  }
+
+  .rsvp_title {
+    font-size: 48px;
+  }
+
+  .first {
+    font-size: 70px;
+  }
+
+  .rsvp_form_section {
+    padding: 30px 0;
+    max-width: 90%;
+  }
+
+  .rsvp_form {
+    padding: 30px 20px;
+  }
+
+  .rsvp_label {
+    font-size: 14px;
+  }
+
+  .rsvp_input,
+  .rsvp_select {
+    padding: 12px;
+    font-size: 14px;
+  }
+
+  .submit_btn {
+    padding: 14px;
+    font-size: 14px;
+  }
+}
+
+/* ========================== */
+/*       MOBILE DEVICES       */
+/* ========================== */
+@media (max-width: 480px) {
+  .bread_crumb {
+    padding: 15px;
+    gap: 10px;
+  }
+
+  .home_title {
+    font-size: 12px;
+  }
+
+  .rsvp_contain {
+    padding: 20px;
+  }
+
+  .rsvp_title {
+    font-size: 38px;
+  }
+
+  .first {
+    font-size: 55px;
+  }
+
+  .rsvp_para {
+    font-size: 14px;
+  }
+
+  .rsvp_form {
+    padding: 25px 15px;
+  }
+
+  .rsvp_label {
+    font-size: 13px;
+  }
+
+  .rsvp_input,
+  .rsvp_select,
+  textarea {
+    padding: 12px;
+    font-size: 13px;
+  }
+
+  .submit_btn {
+    padding: 20px;
+    font-size: 13px;
+  }
+}
+
+/* ========================== */
+/*     EXTRA SMALL PHONES     */
+/* ========================== */
+@media (max-width: 360px) {
+  .rsvp_title {
+    font-size: 32px;
+  }
+
+  .first {
+    font-size: 48px;
+  }
+
+  .bread_crumb {
+    padding: 10px;
+  }
+
+  .rsvp_form {
+    padding: 20px;
+  }
+
+  .submit_btn {
+    padding: 10px;
+    font-size: 20px;
+  }
+}
