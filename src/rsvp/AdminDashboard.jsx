@@ -297,13 +297,78 @@ const parseCSV = (text) => {
     return obj;
   });
 };
-const rowToGuest = (row) => ({
-  name: row.name || row.full_name || row.fullname || "",
-  plusOneName: row.plus_one_name || row.plusonename || row.plus_one || "",
-  hasPlusOne: ["yes", "true", "1"].includes(
+const MEAL_LABELS = { steak: "Steak", fish: "Fish", vegetarian: "Vegetarian" };
+const ALL_EVENT_KEYS = EVENTS.map((e) => e.key);
+
+/* Guest docs support the old format (hasPlusOne / plusOneName) and the new one
+   (invitedEvents / maxPlusOnes / plusOneNames). These read both. */
+const guestInvited = (g) =>
+  Array.isArray(g.invitedEvents) && g.invitedEvents.length
+    ? g.invitedEvents
+    : ALL_EVENT_KEYS;
+const guestMaxPlus = (g) =>
+  typeof g.maxPlusOnes === "number" ? g.maxPlusOnes : g.hasPlusOne ? 1 : 0;
+const guestPlusNames = (g) =>
+  Array.isArray(g.plusOneNames)
+    ? g.plusOneNames
+    : g.plusOneName
+      ? [g.plusOneName]
+      : [];
+
+/* All plus-ones of an RSVP (new array format, or the legacy single fields) */
+const rsvpPlusOnes = (r) => {
+  if (Array.isArray(r.plusOnes)) return r.plusOnes;
+  if (r.hasPlusOne === "yes")
+    return [
+      {
+        name: r.plusOneName || "",
+        meal: "",
+        events: {
+          welcomeParty: !!r.plusOneWelcomeParty,
+          rehearsalDinner: !!r.plusOneRehearsalDinner,
+          theWedding: !!r.plusOneTheWedding,
+        },
+      },
+    ];
+  return [];
+};
+
+/* CSV columns: name, invited_events, max_plus_ones, plus_one_names
+   invited_events  -> "welcomeParty|rehearsalDinner|theWedding" (blank = all)
+   plus_one_names  -> "Name A|Name B" (optional)
+   Old columns (has_plus_one, plus_one_name) still work. */
+const rowToGuest = (row) => {
+  const invitedRaw = (row.invited_events || row.events || "").trim();
+  const invitedEvents = invitedRaw
+    ? invitedRaw
+        .split(/[|;]/)
+        .map((s) => s.trim().toLowerCase().replace(/[\s_-]+/g, ""))
+        .map((s) => ALL_EVENT_KEYS.find((k) => k.toLowerCase() === s))
+        .filter(Boolean)
+    : ALL_EVENT_KEYS;
+
+  const legacyHas = ["yes", "true", "1"].includes(
     String(row.has_plus_one ?? row.hasplusone ?? "no").toLowerCase(),
-  ),
-});
+  );
+  const maxRaw = parseInt(row.max_plus_ones ?? row.plus_ones ?? "", 10);
+  const maxPlusOnes = Number.isFinite(maxRaw) ? Math.max(0, maxRaw) : legacyHas ? 1 : 0;
+
+  const namesRaw = row.plus_one_names || row.plus_one_name || row.plusonename || row.plus_one || "";
+  const plusOneNames = maxPlusOnes
+    ? namesRaw
+        .split(/[|;]/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, maxPlusOnes)
+    : [];
+
+  return {
+    name: row.name || row.full_name || row.fullname || "",
+    invitedEvents: invitedEvents.length ? invitedEvents : ALL_EVENT_KEYS,
+    maxPlusOnes,
+    plusOneNames,
+  };
+};
 const exportToCSV = (data) => {
   if (!data.length) {
     message.warning("No data to export");
@@ -317,15 +382,16 @@ const exportToCSV = (data) => {
     "Welcome Party",
     "Rehearsal Dinner",
     "The Wedding",
-    "Has +1",
-    "+1 Name",
-    "+1 Welcome Party",
-    "+1 Rehearsal Dinner",
-    "+1 The Wedding",
+    "Meal",
+    "# Plus-Ones",
+    "Plus-One Names",
+    "Plus-One Meals",
+    "Plus-One Events",
     "Dietary",
   ];
-  const rows = data.map((r) =>
-    [
+  const rows = data.map((r) => {
+    const pos = rsvpPlusOnes(r);
+    return [
       r.fullName,
       r.email,
       r.phone,
@@ -333,15 +399,21 @@ const exportToCSV = (data) => {
       r.attendWelcomeParty ? "Yes" : "No",
       r.attendRehearsalDinner ? "Yes" : "No",
       r.attendTheWedding ? "Yes" : "No",
-      r.hasPlusOne,
-      r.plusOneName,
-      r.plusOneWelcomeParty ? "Yes" : "No",
-      r.plusOneRehearsalDinner ? "Yes" : "No",
-      r.plusOneTheWedding ? "Yes" : "No",
+      MEAL_LABELS[r.meal] || "",
+      pos.length,
+      pos.map((p) => p.name).join("; "),
+      pos.map((p) => MEAL_LABELS[p.meal] || "—").join("; "),
+      pos
+        .map((p) =>
+          EVENTS.filter((ev) => p.events?.[ev.key])
+            .map((ev) => ev.label)
+            .join("/") || "—",
+        )
+        .join("; "),
       r.dietary,
-    ].map((v) => `"${(v ?? "").toString().replace(/"/g, '""')}"`),
-  );
-  const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    ].map((v) => `"${(v ?? "").toString().replace(/"/g, '""')}"`);
+  });
+  const csv =[headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -411,7 +483,7 @@ const Admin = () => {
   const [guestModalOpen, setGuestModalOpen] = useState(false);
   const [guestForm] = Form.useForm();
   const [guestLoading, setGuestLoading] = useState(false);
-  const [hasPlusOneField, setHasPlusOneField] = useState(false);
+  const [maxPlusOnesField, setMaxPlusOnesField] = useState(0);
 
   const [csvPreview, setCsvPreview] = useState([]);
   const [csvImporting, setCsvImporting] = useState(false);
@@ -496,14 +568,27 @@ const Admin = () => {
   const handleAddGuest = async (values) => {
     setGuestLoading(true);
     try {
+      const max = Math.max(0, Number(values.maxPlusOnes) || 0);
+      const names = [];
+      for (let i = 0; i < max; i++) {
+        const n = (values[`plusOneName_${i}`] || "").trim();
+        if (n) names[i] = n;
+      }
       await addDoc(collection(db, "guests"), {
         name: values.name.trim(),
-        hasPlusOne: values.hasPlusOne || false,
-        plusOneName: values.hasPlusOne ? (values.plusOneName || "").trim() : "",
+        invitedEvents: values.invitedEvents?.length
+          ? values.invitedEvents
+          : ALL_EVENT_KEYS,
+        maxPlusOnes: max,
+        // only keep names if every slot up to the last named one is filled
+        plusOneNames: Array.from(names, (n) => n || "").filter(Boolean),
+        // legacy fields so older code keeps working
+        hasPlusOne: max > 0,
+        plusOneName: names.find(Boolean) || "",
       });
       message.success("Guest added!");
       guestForm.resetFields();
-      setHasPlusOneField(false);
+      setMaxPlusOnesField(0);
       setGuestModalOpen(false);
       fetchGuests();
     } catch (e) {
@@ -553,11 +638,28 @@ const Admin = () => {
   /* ── derived stats ── */
   const attending = rsvpData.filter((r) => r.attendingWedding === "yes");
   const notAttending = rsvpData.filter((r) => r.attendingWedding === "no");
-  const withPlusOne = attending.filter((r) => r.hasPlusOne === "yes");
-  const welcomePartyCount = attending.filter((r) => r.attendWelcomeParty).length;
-  const rehearsalDinnerCount = attending.filter((r) => r.attendRehearsalDinner).length;
-  const theWeddingCount = attending.filter((r) => r.attendTheWedding).length;
-  const totalGuests = attending.length + withPlusOne.length;
+  const plusOneTotal = attending.reduce((n, r) => n + rsvpPlusOnes(r).length, 0);
+  const countEvent = (ev) =>
+    attending.reduce(
+      (n, r) =>
+        n +
+        (r[ev.attendField] ? 1 : 0) +
+        rsvpPlusOnes(r).filter((p) => p.events?.[ev.key]).length,
+      0,
+    );
+  const welcomePartyCount = countEvent(EVENTS[0]);
+  const rehearsalDinnerCount = countEvent(EVENTS[1]);
+  const theWeddingCount = countEvent(EVENTS[2]);
+  const totalGuests = attending.length + plusOneTotal;
+
+  // meal tally (guests + their plus-ones)
+  const mealCounts = { steak: 0, fish: 0, vegetarian: 0 };
+  attending.forEach((r) => {
+    if (mealCounts[r.meal] !== undefined) mealCounts[r.meal]++;
+    rsvpPlusOnes(r).forEach((p) => {
+      if (mealCounts[p.meal] !== undefined) mealCounts[p.meal]++;
+    });
+  });
   const pendingCount = Math.max(0, guestList.length - rsvpData.length);
   const responseRate = guestList.length
     ? Math.round((rsvpData.length / guestList.length) * 100)
@@ -573,9 +675,10 @@ const Admin = () => {
   const eventBar = EVENTS.map((ev) => ({
     event: ev.label,
     guests: attending.filter((r) => r[ev.attendField]).length,
-    plusOnes: attending.filter(
-      (r) => r[ev.attendField] && r.hasPlusOne === "yes" && r[ev.plusOneField],
-    ).length,
+    plusOnes: attending.reduce(
+      (n, r) => n + rsvpPlusOnes(r).filter((p) => p.events?.[ev.key]).length,
+      0,
+    ),
   }));
 
   const dietaryGuests = attending.filter((r) => r.dietary && r.dietary.trim());
@@ -638,20 +741,35 @@ const Admin = () => {
       ),
     },
     {
-      title: "+1",
-      dataIndex: "hasPlusOne",
-      width: 160,
-      render: (v, r) =>
-        v === "yes" ? (
+      title: "Meal",
+      dataIndex: "meal",
+      width: 110,
+      render: (v) =>
+        v ? <WTag type="gold">{MEAL_LABELS[v] || v}</WTag> : <WTag type="no">—</WTag>,
+      responsive: ["md", "lg"],
+    },
+    {
+      title: "+1s",
+      width: 190,
+      render: (_, r) => {
+        const pos = rsvpPlusOnes(r);
+        return pos.length ? (
           <div>
-            <WTag type="yes">Yes</WTag>
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>
-              {r.plusOneName || "—"}
-            </div>
+            <WTag type="yes">{pos.length}</WTag>
+            {pos.map((p, i) => (
+              <div
+                key={i}
+                style={{ fontSize: 11, color: C.muted, marginTop: 3 }}
+              >
+                {p.name || "—"}
+                {p.meal ? ` · ${MEAL_LABELS[p.meal] || p.meal}` : ""}
+              </div>
+            ))}
           </div>
         ) : (
           <WTag type="no">No</WTag>
-        ),
+        );
+      },
       responsive: ["md", "lg"],
     },
     {
@@ -691,15 +809,35 @@ const Admin = () => {
       render: (v) => <span style={{ fontWeight: 500 }}>{v}</span>,
     },
     {
-      title: "Has +1",
-      dataIndex: "hasPlusOne",
-      render: (v) =>
-        v ? <WTag type="yes">Yes</WTag> : <WTag type="no">No</WTag>,
+      title: "Invited To",
+      render: (_, g) => (
+        <Space size={4} wrap>
+          {EVENTS.map((ev) => (
+            <WTag
+              key={ev.key}
+              type={guestInvited(g).includes(ev.key) ? ev.tag : "no"}
+            >
+              {guestInvited(g).includes(ev.key) ? ev.label : "—"}
+            </WTag>
+          ))}
+        </Space>
+      ),
     },
     {
-      title: "+1 Name",
-      dataIndex: "plusOneName",
-      render: (v) => v || <span style={{ color: "#ccc" }}>—</span>,
+      title: "Max +1s",
+      render: (_, g) =>
+        guestMaxPlus(g) > 0 ? (
+          <WTag type="yes">{guestMaxPlus(g)}</WTag>
+        ) : (
+          <WTag type="no">0</WTag>
+        ),
+    },
+    {
+      title: "Assigned +1 Names",
+      render: (_, g) =>
+        guestPlusNames(g).join(", ") || (
+          <span style={{ color: "#ccc" }}>—</span>
+        ),
     },
     {
       title: "RSVP Status",
@@ -940,7 +1078,22 @@ const Admin = () => {
                   <StatCard
                     value={totalGuests}
                     label="Total Guests"
-                    sub={`incl. ${withPlusOne.length} plus-ones`}
+                    sub={`incl. ${plusOneTotal} plus-ones`}
+                  />
+                  <StatCard
+                    value={mealCounts.steak}
+                    label="Steak"
+                    sub="meals ordered"
+                  />
+                  <StatCard
+                    value={mealCounts.fish}
+                    label="Fish"
+                    sub="meals ordered"
+                  />
+                  <StatCard
+                    value={mealCounts.vegetarian}
+                    label="Vegetarian"
+                    sub="meals ordered"
                   />
                   <StatCard
                     value={welcomePartyCount}
@@ -1170,11 +1323,10 @@ const Admin = () => {
                             ),
                         },
                         {
-                          title: "+1",
-                          dataIndex: "hasPlusOne",
-                          render: (v) =>
-                            v === "yes" ? (
-                              <WTag type="sage">Yes</WTag>
+                          title: "+1s",
+                          render: (_, r) =>
+                            rsvpPlusOnes(r).length ? (
+                              <WTag type="sage">{rsvpPlusOnes(r).length}</WTag>
                             ) : (
                               <WTag type="no">No</WTag>
                             ),
@@ -1277,15 +1429,22 @@ const Admin = () => {
                         columns={[
                           { title: "Name", dataIndex: "name" },
                           {
-                            title: "+1?",
-                            dataIndex: "hasPlusOne",
-                            render: (v) => (v ? "Yes" : "No"),
-                            width: 60,
+                            title: "Invited To",
+                            dataIndex: "invitedEvents",
+                            render: (v) =>
+                              EVENTS.filter((ev) => v.includes(ev.key))
+                                .map((ev) => ev.label)
+                                .join(", "),
                           },
                           {
-                            title: "+1 Name",
-                            dataIndex: "plusOneName",
-                            render: (v) => v || "—",
+                            title: "Max +1s",
+                            dataIndex: "maxPlusOnes",
+                            width: 80,
+                          },
+                          {
+                            title: "+1 Names",
+                            dataIndex: "plusOneNames",
+                            render: (v) => (v && v.length ? v.join(", ") : "—"),
                           },
                         ]}
                       />
@@ -1318,7 +1477,7 @@ const Admin = () => {
                   />
                   <span style={{ fontSize: 12, color: C.muted }}>
                     {filteredGuests.length} guests ·{" "}
-                    {guestList.filter((g) => g.hasPlusOne).length} with +1
+                    {guestList.reduce((n, g) => n + guestMaxPlus(g), 0)} +1s allowed
                   </span>
                 </div>
                 <div className="w-table-wrap">
@@ -1376,6 +1535,11 @@ const Admin = () => {
                           <div style={{ fontSize: 12, color: C.muted }}>
                             {r.email || "No email"}
                           </div>
+                          {r.meal && (
+                            <div style={{ marginTop: 6 }}>
+                              <WTag type="gold">{MEAL_LABELS[r.meal]}</WTag>
+                            </div>
+                          )}
                         </div>
                         <div
                           style={{
@@ -1441,18 +1605,16 @@ const Admin = () => {
                   .map((ev) => ev.label)
                   .join(", ") || "—",
               ],
-              ["Plus-One", viewing.hasPlusOne === "yes" ? "Yes" : "No"],
-              ...(viewing.hasPlusOne === "yes"
-                ? [
-                    ["+1 Name", viewing.plusOneName || "—"],
-                    [
-                      "+1 Events",
-                      EVENTS.filter((ev) => viewing[ev.plusOneField])
-                        .map((ev) => ev.label)
-                        .join(", ") || "—",
-                    ],
-                  ]
-                : []),
+              ["Meal", MEAL_LABELS[viewing.meal] || "—"],
+              ["Plus-Ones", rsvpPlusOnes(viewing).length || "None"],
+              ...rsvpPlusOnes(viewing).map((p, i) => [
+                `+1 #${i + 1}`,
+                `${p.name || "—"} · ${
+                  EVENTS.filter((ev) => p.events?.[ev.key])
+                    .map((ev) => ev.label)
+                    .join(", ") || "no events"
+                } · ${MEAL_LABELS[p.meal] || "no meal"}`,
+              ]),
               ["Dietary", viewing.dietary || "—"],
             ].map(([label, val]) => (
               <div className="w-detail-row" key={label}>
@@ -1485,7 +1647,7 @@ const Admin = () => {
         onCancel={() => {
           setGuestModalOpen(false);
           guestForm.resetFields();
-          setHasPlusOneField(false);
+          setMaxPlusOnesField(0);
         }}
         footer={null}
         width={420}
@@ -1494,7 +1656,7 @@ const Admin = () => {
           form={guestForm}
           layout="vertical"
           onFinish={handleAddGuest}
-          initialValues={{ hasPlusOne: false }}
+          initialValues={{ maxPlusOnes: 0, invitedEvents: ALL_EVENT_KEYS }}
           style={{ paddingTop: 8 }}
         >
           <Form.Item
@@ -1508,26 +1670,46 @@ const Admin = () => {
             />
           </Form.Item>
           <Form.Item
-            label="Has a +1?"
-            name="hasPlusOne"
-            valuePropName="checked"
+            label="Invited To"
+            name="invitedEvents"
+            rules={[{ required: true, message: "Pick at least one event" }]}
           >
-            <Switch
-              onChange={(checked) => {
-                setHasPlusOneField(checked);
-                if (!checked) guestForm.setFieldValue("plusOneName", "");
-              }}
-              style={{ background: hasPlusOneField ? C.rose : "#ddd" }}
-            />
+            <Select mode="multiple" placeholder="Select events">
+              {EVENTS.map((ev) => (
+                <Option key={ev.key} value={ev.key}>
+                  {ev.label}
+                </Option>
+              ))}
+            </Select>
           </Form.Item>
-          {hasPlusOneField && (
-            <Form.Item label="+1 Full Name (optional)" name="plusOneName">
+          <Form.Item label="Plus-Ones Allowed" name="maxPlusOnes">
+            <Select
+              onChange={(n) => {
+                setMaxPlusOnesField(n);
+                // clear name fields that no longer exist
+                for (let i = n; i < 10; i++)
+                  guestForm.setFieldValue(`plusOneName_${i}`, "");
+              }}
+            >
+              {Array.from({ length: 11 }, (_, n) => (
+                <Option key={n} value={n}>
+                  {n === 0 ? "None" : n}
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+          {Array.from({ length: maxPlusOnesField }, (_, i) => (
+            <Form.Item
+              key={i}
+              label={`+1 #${i + 1} Name (optional)`}
+              name={`plusOneName_${i}`}
+            >
               <Input
                 placeholder="Leave blank if unknown"
                 style={{ borderColor: C.border }}
               />
             </Form.Item>
-          )}
+          ))}
           <div
             style={{
               display: "flex",
@@ -1542,7 +1724,7 @@ const Admin = () => {
               onClick={() => {
                 setGuestModalOpen(false);
                 guestForm.resetFields();
-                setHasPlusOneField(false);
+                setMaxPlusOnesField(0);
               }}
             >
               Cancel
